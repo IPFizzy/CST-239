@@ -21,8 +21,6 @@ public class StoreFrontApp {
 
     /**
      * Program entry point.
-     *
-     * @param args command-line arguments (not used for this assignment)
      */
     public static void main(String[] args) {
 
@@ -36,6 +34,12 @@ public class StoreFrontApp {
         // Scanner reads the user's menu choices and input.
         // We keep it open for the entire program and close it once at the end.
         Scanner scanner = new Scanner(System.in);
+
+        // Simple welcome banner so the user knows the shop is ready.
+        System.out.println("================================");
+        System.out.println("Welcome to Keon's Adventurer Shop!");
+        System.out.println("Type a menu number to get started.");
+        System.out.println("================================");
 
         // Main loop flag. When the user chooses "0", we flip this to false.
         boolean running = true;
@@ -56,118 +60,98 @@ public class StoreFrontApp {
                         break;
 
                     case "2":
-                        // Purchase moves items from inventory into the shopping cart.
+                        // Purchase a product (remove stock and add to cart).
                         handlePurchase(storeFront, scanner);
                         break;
 
                     case "3":
-                        // Cancel purchase removes items from the cart and restores inventory.
+                        // Cancel a purchase (remove from cart and add stock back).
                         handleCancel(storeFront, scanner);
                         break;
 
                     case "4":
-                        // View cart shows what the user has added so far.
+                        // View what's in the shopping cart.
                         printCart(storeFront);
                         break;
 
                     case "5":
-                        // Total is calculated from what's currently in the cart.
-                        System.out.println("Cart total: $" + storeFront.getCartTotal());
+                        // Show the total cost of the cart.
+                        System.out.println("Cart Total: $" + storeFront.getCartTotal());
                         break;
 
                     case "6":
-                        // Re-initialize resets the store and clears the cart.
-                        // This is useful when demonstrating the app during the screencast.
+                        // Re-initialize store inventory and clear cart.
                         storeFront.initializeStore();
-                        System.out.println("Store re-initialized.");
+                        System.out.println("Store re-initialized and cart cleared.");
                         break;
 
                     case "0":
-                        // Exit the program loop.
+                        // Exit the program.
                         running = false;
                         break;
 
                     default:
-                        // If they type something not on the menu, keep the program running.
-                        System.out.println("Invalid option. Try again.");
+                        System.out.println("Invalid option. Please choose a menu number.");
                         break;
                 }
             } catch (Exception ex) {
-                /*
-                 * We catch exceptions here so the program does not crash.
-                 * Most errors will come from invalid input or invalid actions:
-                 * - Purchasing more than stock
-                 * - Canceling more than what's in the cart
-                 * - Typing a product name that does not exist
-                 */
+                // Catch errors and display the message so the user knows what went wrong.
                 System.out.println("Error: " + ex.getMessage());
             }
 
-            // Blank line keeps the console output easier to read between actions.
-            System.out.println();
+            System.out.println(); // spacing between actions
         }
 
-        // Always close the scanner before exiting to clean up system resources.
+        // Clean shutdown.
         scanner.close();
-
-        System.out.println("Goodbye.");
+        System.out.println("Goodbye!");
     }
 
     /**
-     * Prints the main menu options for the user.
+     * Prints the available menu options.
      */
     private static void printMenu() {
-        System.out.println("==== Store Front ====");
+        System.out.println("==== Adventurer Shop ====");
         System.out.println("1) List Inventory");
-        System.out.println("2) Purchase Product");
+        System.out.println("2) Purchase Item");
         System.out.println("3) Cancel Purchase");
         System.out.println("4) View Cart");
         System.out.println("5) View Cart Total");
         System.out.println("6) Re-Initialize Store");
         System.out.println("0) Exit");
-        System.out.print("Select: ");
+        System.out.print("Enter choice: ");
     }
 
     /**
-     * Prints all products currently in inventory.
-     *
-     * @param products inventory product list
+     * Prints the inventory list to the console.
      */
     private static void printInventory(List<SalableProduct> products) {
-        System.out.println("---- Inventory ----");
-
-        // Each product has a clean toString() format so listing is simple.
+        System.out.println("Inventory:");
+        if (products.isEmpty()) {
+            System.out.println("(No products in inventory)");
+            return;
+        }
         for (SalableProduct p : products) {
             System.out.println(p);
         }
     }
 
     /**
-     * Handles the "Purchase Product" menu option.
-     * Reads the product name and quantity, then calls StoreFront to perform the purchase.
-     *
-     * @param storeFront store front controller
-     * @param scanner input reader
+     * Handles the purchase flow by collecting input and calling StoreFront.
      */
     private static void handlePurchase(StoreFront storeFront, Scanner scanner) {
         System.out.print("Enter product name to purchase: ");
         String name = scanner.nextLine().trim();
 
-        System.out.print("Enter quantity: ");
+        System.out.print("Enter quantity to purchase: ");
         int qty = Integer.parseInt(scanner.nextLine().trim());
 
-        // If there is not enough stock, StoreFront will throw an error.
         storeFront.purchaseProduct(name, qty);
-
-        System.out.println("Added to cart: " + name + " x" + qty);
+        System.out.println("Added to cart.");
     }
 
     /**
-     * Handles the "Cancel Purchase" menu option.
-     * Reads the product name and quantity, then calls StoreFront to cancel the purchase.
-     *
-     * @param storeFront store front controller
-     * @param scanner input reader
+     * Handles the cancel flow by collecting input and calling StoreFront.
      */
     private static void handleCancel(StoreFront storeFront, Scanner scanner) {
         System.out.print("Enter product name to cancel: ");
@@ -176,30 +160,24 @@ public class StoreFrontApp {
         System.out.print("Enter quantity to cancel: ");
         int qty = Integer.parseInt(scanner.nextLine().trim());
 
-        // If the cart does not contain enough quantity, StoreFront will throw an error.
         storeFront.cancelPurchase(name, qty);
-
-        System.out.println("Canceled from cart: " + name + " x" + qty);
+        System.out.println("Cancelled from cart.");
     }
 
     /**
-     * Prints the current shopping cart contents.
-     *
-     * @param storeFront store front controller (provides access to the cart)
+     * Prints cart contents in a readable way.
      */
     private static void printCart(StoreFront storeFront) {
-        System.out.println("---- Cart ----");
-
-        // Cart stores product names and quantities. We display what is currently in the map.
         Map<String, Integer> items = storeFront.getShoppingCart().getItems();
+        System.out.println("Shopping Cart:");
 
         if (items.isEmpty()) {
-            System.out.println("Cart is empty.");
+            System.out.println("(Cart is empty)");
             return;
         }
 
         for (Map.Entry<String, Integer> entry : items.entrySet()) {
-            System.out.println(entry.getKey() + " x" + entry.getValue());
+            System.out.println(entry.getKey() + " x " + entry.getValue());
         }
     }
 }
