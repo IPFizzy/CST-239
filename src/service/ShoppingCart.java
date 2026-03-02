@@ -4,132 +4,128 @@ import model.SalableProduct;
 
 import java.math.BigDecimal;
 import java.util.Collections;
-import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Represents the user's shopping cart.
+ * Stores items that the user intends to purchase.
  *
- * The cart tracks what the user intends to buy, but it does not manage stock.
- * Stock is handled by InventoryManager, and StoreFront coordinates changes between them.
+ * Requirements supported:
+ * - Initialize cart on StoreFront startup
+ * - Add to cart on purchase
+ * - Remove from cart on cancel
+ * - Return cart contents
+ * - Clear cart contents
  */
 public class ShoppingCart {
 
-    /*
-     * Map of product name -> quantity in the cart.
-     * LinkedHashMap keeps items in the order they were added, which looks nicer in console output.
-     */
-    private final Map<String, Integer> items = new LinkedHashMap<>();
+    // Store cart items by normalized product name
+    private final Map<String, Integer> items = new HashMap<>();
 
     /**
-     * Adds an item to the cart.
+     * Adds a quantity of an item to the cart.
      *
-     * This method only updates the cart. It does not check inventory stock.
-     * StoreFront is responsible for verifying stock before calling this.
-     *
-     * @param productName product name
-     * @param qty quantity to add (must be > 0)
+     * @param productName name of item
+     * @param qty         quantity to add
      */
     public void addItem(String productName, int qty) {
-
-        // Product name is required so the cart always has meaningful keys.
-        if (productName == null || productName.isBlank()) {
+        if (productName == null || productName.trim().isEmpty()) {
             throw new IllegalArgumentException("Product name cannot be blank.");
         }
-
-        // Quantity must be positive, otherwise the cart could become inconsistent.
         if (qty <= 0) {
-            throw new IllegalArgumentException("Quantity must be > 0.");
+            throw new IllegalArgumentException("Quantity must be greater than 0.");
         }
 
-        // Keep the key trimmed so "Mouse" and "Mouse " do not become separate entries.
-        String key = productName.trim();
-
-        // If the item already exists, add onto it. Otherwise, start at the given quantity.
-        items.put(key, items.getOrDefault(key, 0) + qty);
+        String key = normalizeKey(productName);
+        int currentQty = items.getOrDefault(key, 0);
+        items.put(key, currentQty + qty);
     }
 
     /**
-     * Removes an item quantity from the cart.
+     * Removes a quantity of an item from the cart.
      *
-     * If the removal brings the quantity down to zero, the item is removed completely.
-     *
-     * @param productName product name
-     * @param qty quantity to remove (must be > 0)
+     * @param productName name of item
+     * @param qty         quantity to remove
      */
     public void removeItem(String productName, int qty) {
-
-        if (productName == null || productName.isBlank()) {
+        if (productName == null || productName.trim().isEmpty()) {
             throw new IllegalArgumentException("Product name cannot be blank.");
         }
-
         if (qty <= 0) {
-            throw new IllegalArgumentException("Quantity must be > 0.");
+            throw new IllegalArgumentException("Quantity must be greater than 0.");
         }
 
-        String key = productName.trim();
-        int current = items.getOrDefault(key, 0);
+        String key = normalizeKey(productName);
 
-        // Do not allow removing more than what exists in the cart.
-        if (current < qty) {
-            throw new IllegalStateException("Cart does not have enough quantity to remove.");
+        if (!items.containsKey(key)) {
+            throw new IllegalArgumentException("Item is not in the cart.");
         }
 
-        int updated = current - qty;
+        int currentQty = items.get(key);
 
-        // If quantity hits zero, remove the entry entirely to keep output clean.
-        if (updated == 0) {
+        if (qty > currentQty) {
+            throw new IllegalArgumentException("Not enough quantity in the cart to remove.");
+        }
+
+        int newQty = currentQty - qty;
+
+        // If item reaches 0, remove it completely
+        if (newQty == 0) {
             items.remove(key);
         } else {
-            items.put(key, updated);
+            items.put(key, newQty);
         }
     }
 
     /**
-     * Clears all items from the cart.
-     *
-     * Used when the store is re-initialized or if a user checks out in a future milestone.
+     * Clears the entire cart.
      */
     public void clear() {
         items.clear();
     }
 
     /**
-     * Returns a read-only view of the cart contents.
+     * Returns an unmodifiable view of the cart contents.
      *
-     * This prevents other classes from modifying the map directly.
-     *
-     * @return unmodifiable cart map
+     * @return map of item name -> quantity
      */
     public Map<String, Integer> getItems() {
         return Collections.unmodifiableMap(items);
     }
 
     /**
-     * Calculates the total cost of the current cart.
+     * Calculates the cart total using inventory prices.
      *
-     * The cart only stores names and quantities, so we use InventoryManager
-     * to look up product prices. If an item is missing from inventory, that indicates
-     * a mismatch between inventory and cart and should be treated as an error.
-     *
-     * @param inventoryManager inventory manager used to lookup product prices
-     * @return total cost of all items in the cart
+     * @param inventoryManager inventory manager for price lookup
+     * @return total cost
      */
     public BigDecimal calculateTotal(InventoryManager inventoryManager) {
 
         BigDecimal total = BigDecimal.ZERO;
 
-        // Multiply each product's price by its cart quantity and add to the running total.
         for (Map.Entry<String, Integer> entry : items.entrySet()) {
-            String name = entry.getKey();
+
+            String nameKey = entry.getKey();
             int qty = entry.getValue();
 
-            SalableProduct product = inventoryManager.findByName(name)
-                    .orElseThrow(() -> new IllegalStateException("Cart item not found in inventory: " + name));
+            // Find product info from inventory so the cart does not store price data itself
+            SalableProduct product = inventoryManager.findByName(nameKey)
+                    .orElseThrow(() -> new IllegalArgumentException("Product not found in inventory: " + nameKey));
 
-            total = total.add(product.getPrice().multiply(BigDecimal.valueOf(qty)));
+            BigDecimal lineCost = product.getPrice().multiply(new BigDecimal(qty));
+            total = total.add(lineCost);
         }
 
         return total;
+    }
+
+    /**
+     * Normalizes a product name into a key.
+     *
+     * @param name raw name
+     * @return normalized key
+     */
+    private String normalizeKey(String name) {
+        return name.trim().toLowerCase();
     }
 }

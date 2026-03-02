@@ -1,70 +1,63 @@
 package model;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.Objects;
 
 /**
- * Represents a product that can be sold in the store.
+ * Base class for any product that can be sold in the Store Front.
  *
- * This class models the core data for an item available in inventory.
- * Each product has a name, description, price, and quantity in stock.
+ * Each product has:
+ * - name (read-only once constructed)
+ * - description
+ * - price
+ * - quantity (stock level)
  *
- * The name acts as the identifier for equality comparisons in this version
- * of the application.
+ * This class is designed to be extended by specific item types like Weapon, Armor, and Health.
  */
 public class SalableProduct {
 
-    // Name is final because a product's identity should not change once created.
+    // readOnly by design, we only set it during construction
     private final String name;
 
-    // Description can be updated if needed (for example, editing product details).
     private String description;
-
-    // BigDecimal is used instead of double to avoid floating point rounding errors.
     private BigDecimal price;
-
-    // Tracks how many units are currently available in inventory.
     private int quantity;
 
     /**
-     * Creates a new SalableProduct with validated input.
+     * Creates a salable product with the required core fields.
      *
-     * Validation is done here to guarantee that no product
-     * is ever created in an invalid state.
-     *
-     * @param name        Product name (cannot be null or blank)
-     * @param description Product description (null becomes empty string)
-     * @param price       Product price (must be >= 0)
-     * @param quantity    Quantity in stock (must be >= 0)
+     * @param name        Name of the product (required)
+     * @param description Description of the product
+     * @param price       Price of the product
+     * @param quantity    Current stock quantity
      */
     public SalableProduct(String name, String description, BigDecimal price, int quantity) {
 
-        // Prevent creating a product without a meaningful identifier.
-        if (name == null || name.isBlank()) {
-            throw new IllegalArgumentException("Product name cannot be null/blank.");
+        // Basic validation to avoid bad data getting into the system
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException("Product name cannot be blank.");
         }
-
-        // Use setters so validation logic is centralized in one place.
-        setPrice(price);
-        setQuantity(quantity);
+        if (price == null || price.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Price cannot be negative.");
+        }
+        if (quantity < 0) {
+            throw new IllegalArgumentException("Quantity cannot be negative.");
+        }
 
         this.name = name.trim();
         this.description = (description == null) ? "" : description.trim();
+        this.price = price;
+        this.quantity = quantity;
     }
 
     /**
-     * Returns the product name.
-     *
-     * @return product name
+     * @return product name (read-only)
      */
     public String getName() {
         return name;
     }
 
     /**
-     * Returns the product description.
-     *
      * @return product description
      */
     public String getDescription() {
@@ -72,61 +65,44 @@ public class SalableProduct {
     }
 
     /**
-     * Updates the product description.
-     * Null values are converted to an empty string to avoid null checks elsewhere.
+     * Updates product description.
      *
-     * @param description new description
+     * @param description new description value
      */
     public void setDescription(String description) {
         this.description = (description == null) ? "" : description.trim();
     }
 
     /**
-     * Returns the current price of the product.
-     *
-     * @return price as BigDecimal
+     * @return product price
      */
     public BigDecimal getPrice() {
         return price;
     }
 
     /**
-     * Sets the product price.
+     * Updates product price.
      *
-     * Price must be non-null and non-negative.
-     * The value is normalized to two decimal places to represent currency properly.
-     *
-     * @param price price value
+     * @param price new price value
      */
     public void setPrice(BigDecimal price) {
-
-        if (price == null) {
-            throw new IllegalArgumentException("Price cannot be null.");
-        }
-
-        if (price.compareTo(BigDecimal.ZERO) < 0) {
+        if (price == null || price.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Price cannot be negative.");
         }
-
-        // Normalize to two decimal places for consistent currency formatting.
-        this.price = price.setScale(2, RoundingMode.HALF_UP);
+        this.price = price;
     }
 
     /**
-     * Returns the quantity currently in stock.
-     *
-     * @return quantity available
+     * @return current stock quantity
      */
     public int getQuantity() {
         return quantity;
     }
 
     /**
-     * Sets the stock quantity.
+     * Updates product quantity.
      *
-     * Quantity cannot be negative. This ensures inventory integrity.
-     *
-     * @param quantity number of units in stock
+     * @param quantity new quantity value
      */
     public void setQuantity(int quantity) {
         if (quantity < 0) {
@@ -136,65 +112,64 @@ public class SalableProduct {
     }
 
     /**
-     * Decreases the available stock by the specified amount.
+     * Decreases stock by a given amount.
      *
-     * This method prevents inventory from going below zero.
-     *
-     * @param amount amount to subtract
+     * @param amount amount to decrease by
      */
     public void decreaseStock(int amount) {
-
-        if (amount <= 0) {
-            throw new IllegalArgumentException("Decrease amount must be > 0.");
+        if (amount < 0) {
+            throw new IllegalArgumentException("Decrease amount cannot be negative.");
         }
-
-        if (quantity < amount) {
-            throw new IllegalStateException("Not enough stock to decrease by " + amount + ".");
+        if (amount > this.quantity) {
+            throw new IllegalArgumentException("Not enough stock to decrease by that amount.");
         }
-
-        quantity -= amount;
+        this.quantity -= amount;
     }
 
     /**
-     * Increases the available stock.
-     * Used when restocking or canceling a purchase.
+     * Increases stock by a given amount.
      *
-     * @param amount amount to add
+     * @param amount amount to increase by
      */
     public void increaseStock(int amount) {
-
-        if (amount <= 0) {
-            throw new IllegalArgumentException("Increase amount must be > 0.");
+        if (amount < 0) {
+            throw new IllegalArgumentException("Increase amount cannot be negative.");
         }
-
-        quantity += amount;
+        this.quantity += amount;
     }
 
     /**
-     * Returns a formatted string representation of the product.
-     * This is used when printing inventory in the console application.
+     * Human-readable output for inventory listing.
+     *
+     * @return string showing key product info
      */
     @Override
     public String toString() {
-        return String.format("%s ($%s) qty=%d - %s", name, price, quantity, description);
+        return String.format("%s | %s | $%s | Stock: %d",
+                name,
+                description,
+                price.toPlainString(),
+                quantity);
     }
 
     /**
      * Products are considered equal if their names match (case-insensitive).
-     * This supports using the product name as a logical identifier.
+     *
+     * @param o other object
+     * @return true if same product name
      */
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof SalableProduct)) {
-            return false;
-        }
-
-        SalableProduct other = (SalableProduct) o;
-        return name.equalsIgnoreCase(other.name);
+        if (this == o) return true;
+        if (!(o instanceof SalableProduct)) return false;
+        SalableProduct that = (SalableProduct) o;
+        return name.equalsIgnoreCase(that.name);
     }
 
     /**
-     * Hash code is derived from the lowercase name to remain consistent with equals().
+     * Hash code based on product name (case-insensitive approach by normalizing).
+     *
+     * @return hash code
      */
     @Override
     public int hashCode() {

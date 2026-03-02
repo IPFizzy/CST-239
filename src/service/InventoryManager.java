@@ -1,151 +1,151 @@
 package service;
 
-import model.SalableProduct;
-import model.Weapon;
 import model.Armor;
 import model.Health;
+import model.SalableProduct;
+import model.Weapon;
 
 import java.math.BigDecimal;
 import java.util.*;
 
 /**
- * Manages the store's inventory.
+ * Manages the store inventory.
  *
- * For this milestone, inventory is stored in-memory using a map.
- * Later milestones could swap this out for file storage or a database,
- * but keeping it in memory makes testing and demonstration simple.
+ * Requirements supported:
+ * - Initialize store inventory (invoked on StoreFront startup)
+ * - Remove stock when a product is purchased
+ * - Add stock when a purchase is canceled
+ * - Return the entire inventory
  */
 public class InventoryManager {
 
-    /*
-     * Inventory is keyed by a normalized product name so lookups are fast and simple.
-     * LinkedHashMap is used so products stay in insertion order when listed in the console.
-     */
-    private final Map<String, SalableProduct> inventory = new LinkedHashMap<>();
+    // Inventory is stored by a normalized string key
+    private final Map<String, SalableProduct> inventory = new HashMap<>();
 
     /**
-     * Loads a default set of inventory items.
+     * Loads default inventory into the store.
      *
-     * This provides a consistent starting point every time the program runs.
-     * It also makes the video demo easier because the inventory is predictable.
+     * This resets the inventory map to a known state.
      */
     public void initializeDefaultInventory() {
-        // Clear first so re-initializing the store resets it completely.
         inventory.clear();
 
-        // Milestone 2: Start the shop with a few "game" items.
-        // We hardcode these so the demo is consistent every time the program runs.
+        // Weapons
+        addProduct(new Weapon("Iron Sword", "Basic sword with reliable damage.", new BigDecimal("25.00"), 10));
+        addProduct(new Weapon("Oak Bow", "Simple bow with decent range.", new BigDecimal("20.00"), 8));
 
-        // Weapons (2 different kinds)
-        addProduct(new Weapon(
-                "Iron Sword",
-                "Basic one-handed sword, reliable damage",
-                new BigDecimal("35.00"),
-                6
-        ));
-        addProduct(new Weapon(
-                "Oak Bow",
-                "Simple bow for ranged attacks",
-                new BigDecimal("45.00"),
-                4
-        ));
+        // Armor
+        addProduct(new Armor("Leather Armor", "Light armor, easy to wear.", new BigDecimal("30.00"), 6));
+        addProduct(new Armor("Steel Helmet", "Sturdy helmet for extra protection.", new BigDecimal("18.50"), 12));
 
-        // Armor (2 different kinds)
-        addProduct(new Armor(
-                "Leather Armor",
-                "Light armor, decent protection without slowing you down",
-                new BigDecimal("30.00"),
-                5
-        ));
-        addProduct(new Armor(
-                "Iron Shield",
-                "Sturdy shield that helps block incoming hits",
-                new BigDecimal("25.00"),
-                7
-        ));
-
-        // Health (at least 1)
-        addProduct(new Health(
-                "Health Potion",
-                "Restores health when used",
-                new BigDecimal("10.00"),
-                12
-        ));
+        // Health items
+        addProduct(new Health("Small Potion", "Restores a small amount of health.", new BigDecimal("5.00"), 25));
+        addProduct(new Health("Large Potion", "Restores a large amount of health.", new BigDecimal("12.00"), 15));
     }
 
     /**
-     * Adds a product to inventory.
+     * Adds a product into the inventory system.
      *
-     * Product names must be unique (case-insensitive). If a product already exists,
-     * this will overwrite the old entry.
+     * If a product already exists with the same name, this overwrites the existing entry.
+     *
+     * @param product product to add
      */
     public void addProduct(SalableProduct product) {
+        if (product == null) {
+            throw new IllegalArgumentException("Product cannot be null.");
+        }
+
         inventory.put(normalizeKey(product.getName()), product);
     }
 
     /**
-     * Returns all products in inventory as a list.
+     * Returns a list of all products in inventory.
+     *
+     * @return list of SalableProduct objects
      */
     public List<SalableProduct> listProducts() {
         return new ArrayList<>(inventory.values());
     }
 
     /**
-     * Finds a product by name (case-insensitive).
+     * Finds a product by name.
+     *
+     * @param name product name
+     * @return Optional containing product if found
      */
     public Optional<SalableProduct> findByName(String name) {
+        if (name == null) {
+            return Optional.empty();
+        }
+
         return Optional.ofNullable(inventory.get(normalizeKey(name)));
     }
 
     /**
-     * Checks if the inventory has enough stock to fulfill a purchase.
+     * Checks if enough stock exists to cover a requested quantity.
+     *
+     * @param name product name
+     * @param qty  requested quantity
+     * @return true if product exists and has enough stock
      */
     public boolean hasStock(String name, int qty) {
+        if (qty <= 0) {
+            return false;
+        }
+
         Optional<SalableProduct> productOpt = findByName(name);
         if (!productOpt.isPresent()) {
             return false;
         }
+
         return productOpt.get().getQuantity() >= qty;
     }
 
     /**
-     * Removes stock from inventory for a given product.
-     * Throws an exception if the product does not exist or stock is not enough.
+     * Removes stock for a product.
+     *
+     * Invoked when a product is purchased.
+     *
+     * @param name product name
+     * @param qty  quantity to remove
      */
     public void removeStock(String name, int qty) {
-        SalableProduct product = findByName(name)
-                .orElseThrow(() -> new IllegalArgumentException("Unknown product: " + name));
-
         if (qty <= 0) {
             throw new IllegalArgumentException("Quantity must be greater than 0.");
         }
 
-        if (product.getQuantity() < qty) {
-            throw new IllegalArgumentException("Not enough stock to remove.");
-        }
+        SalableProduct product = findByName(name)
+                .orElseThrow(() -> new IllegalArgumentException("Product not found: " + name));
 
         product.decreaseStock(qty);
     }
 
     /**
-     * Adds stock back to inventory (used when canceling purchases).
-     * Throws an exception if the product does not exist.
+     * Adds stock back to a product.
+     *
+     * Invoked when a purchase is canceled.
+     *
+     * @param name product name
+     * @param qty  quantity to add back
      */
     public void addStock(String name, int qty) {
-        SalableProduct product = findByName(name)
-                .orElseThrow(() -> new IllegalArgumentException("Unknown product: " + name));
-
         if (qty <= 0) {
             throw new IllegalArgumentException("Quantity must be greater than 0.");
         }
+
+        SalableProduct product = findByName(name)
+                .orElseThrow(() -> new IllegalArgumentException("Product not found: " + name));
 
         product.increaseStock(qty);
     }
 
     /**
-     * Normalizes map keys so lookups are consistent.
+     * Normalizes a product name into a key for map storage and lookup.
+     *
+     * @param name raw product name
+     * @return normalized key
      */
     private String normalizeKey(String name) {
-        return name == null ? "" : name.trim().toLowerCase();
+        return name.trim().toLowerCase();
     }
 }
