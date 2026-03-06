@@ -1,0 +1,37 @@
+[
+  {
+    "type": "WEAPON",
+    "name": "Iron Sword",
+    "description": "Basic one-handed sword, reliable damage",
+    "price": 35.00,
+    "quantity": 6
+  },
+  {
+    "type": "WEAPON",
+    "name": "Hunter Bow",
+    "description": "Long range bow for steady damage",
+    "price": 55.00,
+    "quantity": 4
+  },
+  {
+    "type": "ARMOR",
+    "name": "Leather Armor",
+    "description": "Light armor with decent protection",
+    "price": 40.00,
+    "quantity": 5
+  },
+  {
+    "type": "HEALTH",
+    "name": "Small Health Potion",
+    "description": "Restores a small amount of health",
+    "price": 10.00,
+    "quantity": 12
+  },
+  {
+    "type": "HEALTH",
+    "name": "Large Health Potion",
+    "description": "Restores a large amount of health",
+    "price": 25.00,
+    "quantity": 6
+  }
+]

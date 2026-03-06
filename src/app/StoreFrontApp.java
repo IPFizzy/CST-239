@@ -1,6 +1,7 @@
 package app;
 
 import model.SalableProduct;
+import service.FileServiceException;
 import service.StoreFront;
 
 import java.util.List;
@@ -19,8 +20,13 @@ import java.util.Scanner;
  */
 public class StoreFrontApp {
 
+    // Recommended: place inventory.json in the project root (same level as src).
+    private static final String INVENTORY_FILE_PATH = "inventory.json";
+
     /**
      * Program entry point.
+     *
+     * @param args command-line arguments
      */
     public static void main(String[] args) {
 
@@ -29,194 +35,155 @@ public class StoreFrontApp {
         StoreFront storeFront = new StoreFront();
 
         // Start with a known state so every run is predictable.
-        storeFront.initializeStore();
+        // Milestone 4: Attempt to load from JSON using FileService.
+        try {
+            storeFront.initializeStore(INVENTORY_FILE_PATH);
+            System.out.println("Inventory loaded from JSON: " + INVENTORY_FILE_PATH);
+        } catch (FileServiceException ex) {
+            System.out.println("Failed to load inventory from JSON.");
+            System.out.println("Reason: " + ex.getMessage());
+            System.out.println("Falling back to default hardcoded inventory for this run.\n");
 
-        // Scanner is shared across the program so we can read user input.
+            storeFront.initializeStore();
+        }
+
         Scanner scanner = new Scanner(System.in);
 
-        boolean programRunning = true;
+        boolean running = true;
 
-        System.out.println("========================================");
-        System.out.println(" Welcome to the Fantasy Store Front!");
-        System.out.println("========================================");
+        System.out.println("Welcome to the Store Front!");
 
-        // Main program loop
-        while (programRunning) {
-
-            // Show the menu and read the user's choice
+        while (running) {
             printMenu();
-            System.out.print("Enter your choice: ");
+            System.out.print("Enter choice: ");
+
             String choice = scanner.nextLine().trim();
 
-            // Handle menu options
-            switch (choice) {
-                case "0":
-                    programRunning = false;
-                    break;
-
-                case "1":
-                    // Inventory list
-                    List<SalableProduct> products = storeFront.getInventoryManager().listProducts();
-                    printInventory(products);
-                    break;
-
-                case "2":
-                    // Purchase flow
-                    handlePurchase(storeFront, scanner);
-                    break;
-
-                case "3":
-                    // Cancel purchase flow
-                    handleCancel(storeFront, scanner);
-                    break;
-
-                case "4":
-                    // Show cart items
-                    printCart(storeFront);
-                    break;
-
-                case "5":
-                    // Show cart total
-                    System.out.println("Cart total: $" + storeFront.getCartTotal());
-                    break;
-
-                case "6":
-                    // Reinitialize store inventory + clear cart
-                    storeFront.initializeStore();
-                    System.out.println("Store was reinitialized and the cart was cleared.");
-                    break;
-
-                default:
-                    System.out.println("Invalid option.");
-                    break;
+            try {
+                switch (choice) {
+                    case "1":
+                        printInventory(storeFront.getInventoryManager().listProducts());
+                        break;
+                    case "2":
+                        handlePurchase(storeFront, scanner);
+                        break;
+                    case "3":
+                        handleCancel(storeFront, scanner);
+                        break;
+                    case "4":
+                        printCart(storeFront);
+                        break;
+                    case "5":
+                        System.out.println("Cart Total: $" + storeFront.getCartTotal());
+                        break;
+                    case "6":
+                        // Re-initialize store inventory and clear cart.
+                        // Try JSON again first, fall back if needed.
+                        try {
+                            storeFront.initializeStore(INVENTORY_FILE_PATH);
+                            System.out.println("Store re-initialized from JSON.");
+                        } catch (FileServiceException ex) {
+                            System.out.println("Failed to re-load inventory from JSON.");
+                            System.out.println("Reason: " + ex.getMessage());
+                            System.out.println("Falling back to default hardcoded inventory.");
+                            storeFront.initializeStore();
+                        }
+                        break;
+                    case "0":
+                        running = false;
+                        break;
+                    default:
+                        System.out.println("Invalid option.");
+                        break;
+                }
+            } catch (RuntimeException ex) {
+                // This prevents stack traces during the demo and keeps output clean.
+                System.out.println("Error: " + ex.getMessage());
             }
 
             System.out.println();
         }
 
-        // Clean shutdown
-        scanner.close();
         System.out.println("Goodbye");
+        scanner.close();
     }
 
     /**
-     * Prints the menu options.
+     * Prints the console menu options.
      */
     private static void printMenu() {
-        System.out.println("Menu Options:");
+        System.out.println("Menu:");
+        System.out.println("1) List Inventory");
+        System.out.println("2) Purchase Product");
+        System.out.println("3) Cancel Purchase");
+        System.out.println("4) View Cart");
+        System.out.println("5) View Cart Total");
+        System.out.println("6) Re-Initialize Store");
         System.out.println("0) Exit");
-        System.out.println("1) Show inventory");
-        System.out.println("2) Purchase a product");
-        System.out.println("3) Cancel a purchase");
-        System.out.println("4) Show cart items");
-        System.out.println("5) Show cart total");
-        System.out.println("6) Reinitialize store");
     }
 
     /**
-     * Prints the inventory list to the console.
+     * Prints the current inventory list.
      *
-     * @param products List of products returned from the InventoryManager
+     * @param products list of products in inventory
      */
     private static void printInventory(List<SalableProduct> products) {
-        System.out.println("Current Inventory:");
-        System.out.println("----------------------------------------");
+        System.out.println("Inventory:");
         for (SalableProduct p : products) {
             System.out.println(p);
         }
-        System.out.println("----------------------------------------");
     }
 
     /**
-     * Handles the purchase sub-flow.
+     * Handles purchasing flow from the console.
      *
-     * @param storeFront StoreFront controller
-     * @param scanner    Scanner for user input
+     * @param storeFront store front instance
+     * @param scanner input scanner
      */
     private static void handlePurchase(StoreFront storeFront, Scanner scanner) {
-
-        // Show inventory first so the user can see what's available.
-        List<SalableProduct> products = storeFront.getInventoryManager().listProducts();
-        printInventory(products);
-
-        // Ask for product name
         System.out.print("Enter product name to purchase: ");
-        String name = scanner.nextLine();
+        String productName = scanner.nextLine();
 
-        // Ask for quantity
         System.out.print("Enter quantity to purchase: ");
-        int qty;
+        int qty = Integer.parseInt(scanner.nextLine().trim());
 
-        try {
-            qty = Integer.parseInt(scanner.nextLine().trim());
-        } catch (NumberFormatException ex) {
-            System.out.println("Error: quantity must be a whole number.");
-            return;
-        }
-
-        try {
-            storeFront.purchaseProduct(name, qty);
-            System.out.println("Added to cart");
-        } catch (IllegalArgumentException ex) {
-            // StoreFront throws IllegalArgumentException for validation and stock errors
-            System.out.println("Error: " + ex.getMessage());
-        }
+        storeFront.purchaseProduct(productName, qty);
+        System.out.println("Added to cart.");
     }
 
     /**
-     * Handles the cancel purchase sub-flow.
+     * Handles cancel purchase flow from the console.
      *
-     * @param storeFront StoreFront controller
-     * @param scanner    Scanner for user input
+     * @param storeFront store front instance
+     * @param scanner input scanner
      */
     private static void handleCancel(StoreFront storeFront, Scanner scanner) {
-
-        // Show cart items so the user knows what can be removed.
-        printCart(storeFront);
-
-        // Ask for product name to cancel
         System.out.print("Enter product name to cancel: ");
-        String name = scanner.nextLine();
+        String productName = scanner.nextLine();
 
-        // Ask for quantity
         System.out.print("Enter quantity to cancel: ");
-        int qty;
+        int qty = Integer.parseInt(scanner.nextLine().trim());
 
-        try {
-            qty = Integer.parseInt(scanner.nextLine().trim());
-        } catch (NumberFormatException ex) {
-            System.out.println("Error: quantity must be a whole number.");
-            return;
-        }
-
-        try {
-            storeFront.cancelPurchase(name, qty);
-            System.out.println("Canceled from cart");
-        } catch (IllegalArgumentException ex) {
-            System.out.println("Error: " + ex.getMessage());
-        }
+        storeFront.cancelPurchase(productName, qty);
+        System.out.println("Canceled from cart.");
     }
 
     /**
-     * Prints the cart contents.
+     * Prints cart contents to the console.
      *
-     * @param storeFront StoreFront controller
+     * @param storeFront store front instance
      */
     private static void printCart(StoreFront storeFront) {
-
         Map<String, Integer> items = storeFront.getShoppingCart().getItems();
 
-        System.out.println("Cart Items:");
-        System.out.println("----------------------------------------");
-
         if (items.isEmpty()) {
-            System.out.println("(Cart is empty)");
-        } else {
-            for (Map.Entry<String, Integer> entry : items.entrySet()) {
-                System.out.println(entry.getKey() + " x" + entry.getValue());
-            }
+            System.out.println("Cart is empty.");
+            return;
         }
 
-        System.out.println("----------------------------------------");
+        System.out.println("Cart:");
+        for (Map.Entry<String, Integer> entry : items.entrySet()) {
+            System.out.println(entry.getKey() + " x " + entry.getValue());
+        }
     }
 }

@@ -137,19 +137,20 @@ public class SalableProduct {
         }
         this.quantity += amount;
     }
-
+    
     /**
-     * Human-readable output for inventory listing.
+     * Returns a formatted string representation of the product.
+     * This is used when printing inventory in the console application.
      *
-     * @return string showing key product info
+     * @return formatted product string for console output
      */
     @Override
     public String toString() {
-        return String.format("%s | %s | $%s | Stock: %d",
+        return String.format("%-20s  $%-7s  Stock: %-3d  %s",
                 name,
-                description,
-                price.toPlainString(),
-                quantity);
+                price,
+                quantity,
+                description);
     }
 
     /**
