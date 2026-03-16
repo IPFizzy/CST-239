@@ -13,8 +13,12 @@ import java.util.Objects;
  * - quantity (stock level)
  *
  * This class is designed to be extended by specific item types like Weapon, Armor, and Health.
+ *
+ * Milestone 5 update:
+ * SalableProduct now implements Comparable so all products can be sorted
+ * alphabetically by name using Collections Framework utilities.
  */
-public class SalableProduct {
+public class SalableProduct implements Comparable<SalableProduct> {
 
     // readOnly by design, we only set it during construction
     private final String name;
@@ -137,7 +141,25 @@ public class SalableProduct {
         }
         this.quantity += amount;
     }
-    
+
+    /**
+     * Compares products alphabetically by name, ignoring case.
+     *
+     * This acts as the natural ordering for SalableProduct objects so
+     * Collections.sort() can sort by product name.
+     *
+     * @param other the other product to compare against
+     * @return negative if this comes before other, 0 if equal, positive if after
+     */
+    @Override
+    public int compareTo(SalableProduct other) {
+        if (other == null) {
+            return -1;
+        }
+
+        return this.name.compareToIgnoreCase(other.name);
+    }
+
     /**
      * Returns a formatted string representation of the product.
      * This is used when printing inventory in the console application.

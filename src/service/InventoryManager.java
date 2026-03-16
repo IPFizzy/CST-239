@@ -7,13 +7,23 @@ import model.Armor;
 import model.Health;
 
 import java.math.BigDecimal;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * Manages the store's inventory.
  *
  * For this milestone, inventory is initialized from an external JSON file using FileService.
  * Inventory is still stored in-memory using a map after it is loaded.
+ *
+ * Milestone 5 update:
+ * InventoryManager now supports sorting products by name or price in either
+ * ascending or descending order using Collections Framework algorithms.
  */
 public class InventoryManager {
 
@@ -113,12 +123,46 @@ public class InventoryManager {
     }
 
     /**
-     * Returns a list of products in inventory.
+     * Returns a list of products in inventory in their current insertion order.
      *
      * @return list of products
      */
     public List<SalableProduct> listProducts() {
         return new ArrayList<>(inventory.values());
+    }
+
+    /**
+     * Returns a sorted list of products based on the selected field and direction.
+     *
+     * Valid sort fields:
+     * - "name"
+     * - "price"
+     *
+     * Valid direction values are controlled by the ascending flag.
+     *
+     * @param sortBy sort field, such as "name" or "price"
+     * @param ascending true for ascending order, false for descending order
+     * @return sorted list of products
+     */
+    public List<SalableProduct> getSortedProducts(String sortBy, boolean ascending) {
+        List<SalableProduct> sortedProducts = new ArrayList<>(inventory.values());
+
+        String normalizedSortBy = (sortBy == null) ? "" : sortBy.trim().toLowerCase();
+
+        if ("price".equals(normalizedSortBy)) {
+            // Sort by numeric price using a Comparator for BigDecimal values.
+            sortedProducts.sort(Comparator.comparing(SalableProduct::getPrice));
+        } else {
+            // Default to name sorting using the natural order defined in SalableProduct.
+            Collections.sort(sortedProducts);
+        }
+
+        // Reverse the list when descending order is requested.
+        if (!ascending) {
+            Collections.reverse(sortedProducts);
+        }
+
+        return sortedProducts;
     }
 
     /**

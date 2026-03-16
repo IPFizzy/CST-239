@@ -89,6 +89,9 @@ public class StoreFrontApp {
                             storeFront.initializeStore();
                         }
                         break;
+                    case "7":
+                        handleSortInventory(storeFront, scanner);
+                        break;
                     case "0":
                         running = false;
                         break;
@@ -119,6 +122,7 @@ public class StoreFrontApp {
         System.out.println("4) View Cart");
         System.out.println("5) View Cart Total");
         System.out.println("6) Re-Initialize Store");
+        System.out.println("7) Sort Inventory");
         System.out.println("0) Exit");
     }
 
@@ -129,9 +133,47 @@ public class StoreFrontApp {
      */
     private static void printInventory(List<SalableProduct> products) {
         System.out.println("Inventory:");
+
         for (SalableProduct p : products) {
             System.out.println(p);
         }
+    }
+
+    /**
+     * Handles inventory sorting flow from the console.
+     *
+     * The user can sort by:
+     * - name
+     * - price
+     *
+     * And in either:
+     * - ascending order
+     * - descending order
+     *
+     * @param storeFront store front instance
+     * @param scanner input scanner
+     */
+    private static void handleSortInventory(StoreFront storeFront, Scanner scanner) {
+        System.out.print("Sort by name or price: ");
+        String sortBy = scanner.nextLine().trim().toLowerCase();
+
+        if (!sortBy.equals("name") && !sortBy.equals("price")) {
+            throw new IllegalArgumentException("Sort field must be 'name' or 'price'.");
+        }
+
+        System.out.print("Sort order (asc or desc): ");
+        String order = scanner.nextLine().trim().toLowerCase();
+
+        if (!order.equals("asc") && !order.equals("desc")) {
+            throw new IllegalArgumentException("Sort order must be 'asc' or 'desc'.");
+        }
+
+        boolean ascending = order.equals("asc");
+
+        List<SalableProduct> sortedProducts = storeFront.getSortedProducts(sortBy, ascending);
+
+        System.out.println("Sorted Inventory:");
+        printInventory(sortedProducts);
     }
 
     /**

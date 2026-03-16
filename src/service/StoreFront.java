@@ -1,6 +1,9 @@
 package service;
 
+import model.SalableProduct;
+
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * Coordinates user actions across InventoryManager and ShoppingCart.
@@ -65,6 +68,20 @@ public class StoreFront {
      */
     public ShoppingCart getShoppingCart() {
         return shoppingCart;
+    }
+
+    /**
+     * Returns a sorted view of the store inventory.
+     *
+     * This keeps sorting logic inside the service layer so the UI only needs
+     * to request the desired sort field and direction.
+     *
+     * @param sortBy sort field, such as "name" or "price"
+     * @param ascending true for ascending order, false for descending order
+     * @return sorted list of products
+     */
+    public List<SalableProduct> getSortedProducts(String sortBy, boolean ascending) {
+        return inventoryManager.getSortedProducts(sortBy, ascending);
     }
 
     /**
