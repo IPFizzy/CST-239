@@ -1,6 +1,7 @@
 package app;
 
 import model.SalableProduct;
+import service.AdministrationService;
 import service.FileServiceException;
 import service.StoreFront;
 
@@ -9,19 +10,23 @@ import java.util.Map;
 import java.util.Scanner;
 
 /**
- * Console driver for the Store Front milestone.
+ * Console driver for the Store Front application.
  *
- * This class is intentionally lightweight. Its job is to:
- * 1) Show a menu
- * 2) Collect user input
- * 3) Call StoreFront methods to perform actions
- *
- * The real business logic lives in StoreFront, InventoryManager, and ShoppingCart.
+ * This class starts the user-facing store menu and also starts the
+ * AdministrationService in the background so an admin can send commands
+ * over the local network while the user is still interacting with the store.
  */
 public class StoreFrontApp {
 
-    // Recommended: place inventory.json in the project root (same level as src).
+    /**
+     * Inventory file used by the storefront and administration service.
+     */
     private static final String INVENTORY_FILE_PATH = "inventory.json";
+
+    /**
+     * Local network port used by the administration service.
+     */
+    private static final int ADMIN_PORT = 5050;
 
     /**
      * Program entry point.
@@ -29,13 +34,8 @@ public class StoreFrontApp {
      * @param args command-line arguments
      */
     public static void main(String[] args) {
-
-        // StoreFront is the main "controller" for the program.
-        // It coordinates inventory changes and cart changes.
         StoreFront storeFront = new StoreFront();
 
-        // Start with a known state so every run is predictable.
-        // Milestone 4: Attempt to load from JSON using FileService.
         try {
             storeFront.initializeStore(INVENTORY_FILE_PATH);
             System.out.println("Inventory loaded from JSON: " + INVENTORY_FILE_PATH);
@@ -45,10 +45,22 @@ public class StoreFrontApp {
             System.out.println("Falling back to default hardcoded inventory for this run.\n");
 
             storeFront.initializeStore();
+            try {
+                storeFront.saveInventoryToJson(INVENTORY_FILE_PATH);
+                System.out.println("Default inventory was saved to JSON: " + INVENTORY_FILE_PATH);
+            } catch (FileServiceException saveEx) {
+                System.out.println("Warning: default inventory could not be saved to JSON.");
+                System.out.println("Reason: " + saveEx.getMessage());
+            }
         }
 
-        Scanner scanner = new Scanner(System.in);
+        AdministrationService administrationService =
+                new AdministrationService(storeFront, INVENTORY_FILE_PATH, ADMIN_PORT);
 
+        administrationService.start();
+        System.out.println("Administration Service started on localhost:" + ADMIN_PORT);
+
+        Scanner scanner = new Scanner(System.in);
         boolean running = true;
 
         System.out.println("Welcome to the Store Front!");
@@ -77,8 +89,6 @@ public class StoreFrontApp {
                         System.out.println("Cart Total: $" + storeFront.getCartTotal());
                         break;
                     case "6":
-                        // Re-initialize store inventory and clear cart.
-                        // Try JSON again first, fall back if needed.
                         try {
                             storeFront.initializeStore(INVENTORY_FILE_PATH);
                             System.out.println("Store re-initialized from JSON.");
@@ -86,7 +96,9 @@ public class StoreFrontApp {
                             System.out.println("Failed to re-load inventory from JSON.");
                             System.out.println("Reason: " + ex.getMessage());
                             System.out.println("Falling back to default hardcoded inventory.");
+
                             storeFront.initializeStore();
+                            storeFront.saveInventoryToJson(INVENTORY_FILE_PATH);
                         }
                         break;
                     case "7":
@@ -100,19 +112,21 @@ public class StoreFrontApp {
                         break;
                 }
             } catch (RuntimeException ex) {
-                // This prevents stack traces during the demo and keeps output clean.
                 System.out.println("Error: " + ex.getMessage());
+            } catch (FileServiceException ex) {
+                System.out.println("File error: " + ex.getMessage());
             }
 
             System.out.println();
         }
 
+        administrationService.stop();
         System.out.println("Goodbye");
         scanner.close();
     }
 
     /**
-     * Prints the console menu options.
+     * Prints the main menu.
      */
     private static void printMenu() {
         System.out.println("Menu:");
@@ -127,31 +141,22 @@ public class StoreFrontApp {
     }
 
     /**
-     * Prints the current inventory list.
+     * Prints the inventory list.
      *
-     * @param products list of products in inventory
+     * @param products products to display
      */
     private static void printInventory(List<SalableProduct> products) {
         System.out.println("Inventory:");
-
-        for (SalableProduct p : products) {
-            System.out.println(p);
+        for (SalableProduct product : products) {
+            System.out.println(product);
         }
     }
 
     /**
-     * Handles inventory sorting flow from the console.
-     *
-     * The user can sort by:
-     * - name
-     * - price
-     *
-     * And in either:
-     * - ascending order
-     * - descending order
+     * Handles the sort workflow.
      *
      * @param storeFront store front instance
-     * @param scanner input scanner
+     * @param scanner scanner for user input
      */
     private static void handleSortInventory(StoreFront storeFront, Scanner scanner) {
         System.out.print("Sort by name or price: ");
@@ -169,7 +174,6 @@ public class StoreFrontApp {
         }
 
         boolean ascending = order.equals("asc");
-
         List<SalableProduct> sortedProducts = storeFront.getSortedProducts(sortBy, ascending);
 
         System.out.println("Sorted Inventory:");
@@ -177,12 +181,13 @@ public class StoreFrontApp {
     }
 
     /**
-     * Handles purchasing flow from the console.
+     * Handles product purchases from the console.
      *
      * @param storeFront store front instance
-     * @param scanner input scanner
+     * @param scanner scanner for user input
+     * @throws FileServiceException when updated inventory cannot be saved
      */
-    private static void handlePurchase(StoreFront storeFront, Scanner scanner) {
+    private static void handlePurchase(StoreFront storeFront, Scanner scanner) throws FileServiceException {
         System.out.print("Enter product name to purchase: ");
         String productName = scanner.nextLine();
 
@@ -194,12 +199,13 @@ public class StoreFrontApp {
     }
 
     /**
-     * Handles cancel purchase flow from the console.
+     * Handles purchase cancellation from the console.
      *
      * @param storeFront store front instance
-     * @param scanner input scanner
+     * @param scanner scanner for user input
+     * @throws FileServiceException when updated inventory cannot be saved
      */
-    private static void handleCancel(StoreFront storeFront, Scanner scanner) {
+    private static void handleCancel(StoreFront storeFront, Scanner scanner) throws FileServiceException {
         System.out.print("Enter product name to cancel: ");
         String productName = scanner.nextLine();
 
@@ -211,7 +217,7 @@ public class StoreFrontApp {
     }
 
     /**
-     * Prints cart contents to the console.
+     * Prints the shopping cart.
      *
      * @param storeFront store front instance
      */

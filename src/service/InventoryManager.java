@@ -1,10 +1,10 @@
 package service;
 
+import model.Armor;
+import model.Health;
 import model.InventoryItemData;
 import model.SalableProduct;
 import model.Weapon;
-import model.Armor;
-import model.Health;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -16,65 +16,43 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Manages the store's inventory.
+ * Manages the store inventory.
  *
- * For this milestone, inventory is initialized from an external JSON file using FileService.
- * Inventory is still stored in-memory using a map after it is loaded.
- *
- * Milestone 5 update:
- * InventoryManager now supports sorting products by name or price in either
- * ascending or descending order using Collections Framework algorithms.
+ * Inventory is stored in memory using a map and can be loaded from or saved to JSON.
  */
 public class InventoryManager {
 
-    /*
-     * Inventory is keyed by a normalized product name so lookups are fast and simple.
-     * LinkedHashMap is used so products stay in insertion order when listed in the console.
-     */
     private final Map<String, SalableProduct> inventory = new LinkedHashMap<>();
-
-    // FileService is responsible for all file I/O and JSON serialization logic.
     private final FileService fileService = new FileService();
 
     /**
-     * Loads inventory items from an external JSON file using the FileService.
+     * Loads inventory from a JSON file.
      *
-     * This supports milestone requirements for JSON initialization and proper exception handling.
-     *
-     * @param filePath path to the JSON file
-     * @throws FileServiceException when the file cannot be read or JSON cannot be parsed
+     * @param filePath inventory file path
+     * @throws FileServiceException when file reading or JSON parsing fails
      */
-    public void initializeInventoryFromJson(String filePath) throws FileServiceException {
+    public synchronized void initializeInventoryFromJson(String filePath) throws FileServiceException {
         inventory.clear();
 
         List<InventoryItemData> items = fileService.readInventoryFromJson(filePath);
-
         for (InventoryItemData item : items) {
-            SalableProduct product = createProductFromItemData(item);
-            addProduct(product);
+            addProduct(createProductFromItemData(item));
         }
     }
 
     /**
-     * Loads a default set of inventory items.
-     *
-     * This method is kept as a safe fallback option in case the JSON file is missing or invalid.
-     * It also makes troubleshooting easier during setup.
+     * Loads the default inventory.
      */
-    public void initializeDefaultInventory() {
-        // Clear first so re-initializing the store resets it completely.
+    public synchronized void initializeDefaultInventory() {
         inventory.clear();
 
-        // Milestone 2: Start the shop with a few "game" items.
-        // We hardcode these so the demo is consistent every time the program runs.
-
-        // Weapons (2 different kinds)
         addProduct(new Weapon(
                 "Iron Sword",
                 "Basic one-handed sword, reliable damage",
                 new BigDecimal("35.00"),
                 6
         ));
+
         addProduct(new Weapon(
                 "Hunter Bow",
                 "Long range bow for steady damage",
@@ -82,7 +60,6 @@ public class InventoryManager {
                 4
         ));
 
-        // Armor
         addProduct(new Armor(
                 "Leather Armor",
                 "Light armor with decent protection",
@@ -90,13 +67,13 @@ public class InventoryManager {
                 5
         ));
 
-        // Health items
         addProduct(new Health(
                 "Small Health Potion",
                 "Restores a small amount of health",
                 new BigDecimal("10.00"),
                 12
         ));
+
         addProduct(new Health(
                 "Large Health Potion",
                 "Restores a large amount of health",
@@ -108,11 +85,9 @@ public class InventoryManager {
     /**
      * Adds a product to inventory.
      *
-     * If a product with the same normalized name already exists, its stock is increased.
-     *
      * @param product product to add
      */
-    public void addProduct(SalableProduct product) {
+    public synchronized void addProduct(SalableProduct product) {
         String key = normalizeKey(product.getName());
 
         if (inventory.containsKey(key)) {
@@ -123,41 +98,32 @@ public class InventoryManager {
     }
 
     /**
-     * Returns a list of products in inventory in their current insertion order.
+     * Returns inventory in insertion order.
      *
-     * @return list of products
+     * @return product list
      */
-    public List<SalableProduct> listProducts() {
+    public synchronized List<SalableProduct> listProducts() {
         return new ArrayList<>(inventory.values());
     }
 
     /**
-     * Returns a sorted list of products based on the selected field and direction.
+     * Returns inventory sorted by name or price.
      *
-     * Valid sort fields:
-     * - "name"
-     * - "price"
-     *
-     * Valid direction values are controlled by the ascending flag.
-     *
-     * @param sortBy sort field, such as "name" or "price"
-     * @param ascending true for ascending order, false for descending order
-     * @return sorted list of products
+     * @param sortBy field to sort by
+     * @param ascending true for ascending order
+     * @return sorted products
      */
-    public List<SalableProduct> getSortedProducts(String sortBy, boolean ascending) {
+    public synchronized List<SalableProduct> getSortedProducts(String sortBy, boolean ascending) {
         List<SalableProduct> sortedProducts = new ArrayList<>(inventory.values());
 
-        String normalizedSortBy = (sortBy == null) ? "" : sortBy.trim().toLowerCase();
+        String normalizedSortBy = sortBy == null ? "" : sortBy.trim().toLowerCase();
 
         if ("price".equals(normalizedSortBy)) {
-            // Sort by numeric price using a Comparator for BigDecimal values.
             sortedProducts.sort(Comparator.comparing(SalableProduct::getPrice));
         } else {
-            // Default to name sorting using the natural order defined in SalableProduct.
             Collections.sort(sortedProducts);
         }
 
-        // Reverse the list when descending order is requested.
         if (!ascending) {
             Collections.reverse(sortedProducts);
         }
@@ -168,24 +134,21 @@ public class InventoryManager {
     /**
      * Finds a product by name.
      *
-     * Optional is used here to avoid returning null and to make calling code safer.
-     *
      * @param name product name
-     * @return optional product
+     * @return matching product if found
      */
-    public Optional<SalableProduct> findByName(String name) {
-        String key = normalizeKey(name);
-        return Optional.ofNullable(inventory.get(key));
+    public synchronized Optional<SalableProduct> findByName(String name) {
+        return Optional.ofNullable(inventory.get(normalizeKey(name)));
     }
 
     /**
-     * Checks if there is enough stock to fulfill a request.
+     * Checks whether enough stock exists.
      *
      * @param name product name
      * @param qty quantity requested
-     * @return true if enough stock exists, otherwise false
+     * @return true when enough stock exists
      */
-    public boolean hasStock(String name, int qty) {
+    public synchronized boolean hasStock(String name, int qty) {
         if (qty <= 0) {
             return false;
         }
@@ -195,14 +158,12 @@ public class InventoryManager {
     }
 
     /**
-     * Removes stock for a product.
+     * Removes stock from inventory.
      *
      * @param name product name
      * @param qty quantity to remove
-     * @throws IllegalArgumentException if product is not found or qty is invalid
-     * @throws IllegalStateException if not enough stock is available
      */
-    public void removeStock(String name, int qty) {
+    public synchronized void removeStock(String name, int qty) {
         if (qty <= 0) {
             throw new IllegalArgumentException("Quantity must be greater than 0.");
         }
@@ -218,13 +179,12 @@ public class InventoryManager {
     }
 
     /**
-     * Adds stock back for a product.
+     * Adds stock back to inventory.
      *
      * @param name product name
      * @param qty quantity to add
-     * @throws IllegalArgumentException if product is not found or qty is invalid
      */
-    public void addStock(String name, int qty) {
+    public synchronized void addStock(String name, int qty) {
         if (qty <= 0) {
             throw new IllegalArgumentException("Quantity must be greater than 0.");
         }
@@ -236,9 +196,55 @@ public class InventoryManager {
     }
 
     /**
-     * Normalizes product names for consistent map key lookups.
+     * Replaces the entire inventory with item data provided by the admin service.
      *
-     * This helps avoid issues where the user types extra spaces or uses different casing.
+     * @param items new item data
+     */
+    public synchronized void replaceInventoryFromItemData(List<InventoryItemData> items) {
+        inventory.clear();
+
+        for (InventoryItemData item : items) {
+            addProduct(createProductFromItemData(item));
+        }
+    }
+
+    /**
+     * Returns the current inventory converted to transferable item data.
+     *
+     * @return item data list
+     */
+    public synchronized List<InventoryItemData> getInventoryItemDataList() {
+        List<InventoryItemData> items = new ArrayList<>();
+
+        for (SalableProduct product : inventory.values()) {
+            items.add(toInventoryItemData(product));
+        }
+
+        return items;
+    }
+
+    /**
+     * Saves the current inventory to JSON.
+     *
+     * @param filePath file path to save
+     * @throws FileServiceException when writing fails
+     */
+    public synchronized void saveInventoryToJson(String filePath) throws FileServiceException {
+        fileService.writeInventoryToJson(filePath, getInventoryItemDataList());
+    }
+
+    /**
+     * Returns the current inventory as a JSON string.
+     *
+     * @return JSON inventory string
+     * @throws FileServiceException when conversion fails
+     */
+    public synchronized String getInventoryAsJson() throws FileServiceException {
+        return fileService.inventoryItemsToJson(getInventoryItemDataList());
+    }
+
+    /**
+     * Normalizes product names for map lookups.
      *
      * @param name product name
      * @return normalized key
@@ -248,11 +254,10 @@ public class InventoryManager {
     }
 
     /**
-     * Converts InventoryItemData into the correct SalableProduct subclass.
+     * Converts raw item data into the correct product type.
      *
-     * @param item inventory item data from JSON
-     * @return SalableProduct instance
-     * @throws IllegalArgumentException when JSON data is missing required values or has an invalid type
+     * @param item item data
+     * @return product instance
      */
     private SalableProduct createProductFromItemData(InventoryItemData item) {
         if (item == null) {
@@ -278,8 +283,33 @@ public class InventoryManager {
             case "HEALTH":
                 return new Health(item.getName(), item.getDescription(), item.getPrice(), item.getQuantity());
             default:
-                throw new IllegalArgumentException("Invalid inventory item type: " + item.getType()
-                        + " (valid: WEAPON, ARMOR, HEALTH)");
+                throw new IllegalArgumentException("Invalid inventory item type: " + item.getType());
         }
+    }
+
+    /**
+     * Converts a product to JSON-transferable item data.
+     *
+     * @param product product to convert
+     * @return item data object
+     */
+    private InventoryItemData toInventoryItemData(SalableProduct product) {
+        String type = "SALABLE_PRODUCT";
+
+        if (product instanceof Weapon) {
+            type = "WEAPON";
+        } else if (product instanceof Armor) {
+            type = "ARMOR";
+        } else if (product instanceof Health) {
+            type = "HEALTH";
+        }
+
+        return new InventoryItemData(
+                type,
+                product.getName(),
+                product.getDescription(),
+                product.getPrice(),
+                product.getQuantity()
+        );
     }
 }

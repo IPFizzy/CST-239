@@ -1,5 +1,6 @@
 package service;
 
+import model.InventoryItemData;
 import model.SalableProduct;
 
 import java.math.BigDecimal;
@@ -8,21 +9,17 @@ import java.util.List;
 /**
  * Coordinates user actions across InventoryManager and ShoppingCart.
  *
- * StoreFront is the main "middle layer" for the application.
- * The UI should call StoreFront methods instead of reaching directly into inventory or cart logic.
+ * StoreFront acts as the main middle layer for both the user console
+ * and the background administration service.
  */
 public class StoreFront {
 
-    // InventoryManager controls products and stock amounts.
     private final InventoryManager inventoryManager;
-
-    // ShoppingCart tracks what the user intends to buy.
     private final ShoppingCart shoppingCart;
+    private String activeInventoryFilePath;
 
     /**
-     * Creates a StoreFront with a fresh InventoryManager and ShoppingCart.
-     *
-     * Keeping these as private fields helps enforce that other code goes through StoreFront.
+     * Creates a StoreFront with fresh service objects.
      */
     public StoreFront() {
         this.inventoryManager = new InventoryManager();
@@ -30,30 +27,38 @@ public class StoreFront {
     }
 
     /**
-     * Initializes the store to a known starting state using inventory loaded from JSON.
+     * Initializes the store from a JSON inventory file and clears the cart.
      *
-     * This loads inventory from an external file and clears the cart so each run starts clean.
-     *
-     * @param inventoryFilePath path to the inventory JSON file
-     * @throws FileServiceException when the inventory file cannot be read or parsed
+     * @param inventoryFilePath inventory file path
+     * @throws FileServiceException when the file cannot be read
      */
-    public void initializeStore(String inventoryFilePath) throws FileServiceException {
+    public synchronized void initializeStore(String inventoryFilePath) throws FileServiceException {
         inventoryManager.initializeInventoryFromJson(inventoryFilePath);
         shoppingCart.clear();
+        this.activeInventoryFilePath = inventoryFilePath;
     }
 
     /**
-     * Initializes the store to a known starting state using default hardcoded inventory.
-     *
-     * This is kept as a fallback option.
+     * Initializes the store with default inventory and clears the cart.
      */
-    public void initializeStore() {
+    public synchronized void initializeStore() {
         inventoryManager.initializeDefaultInventory();
         shoppingCart.clear();
     }
 
     /**
-     * Provides access to the inventory manager for display purposes.
+     * Saves the current inventory to a JSON file.
+     *
+     * @param inventoryFilePath file path to save
+     * @throws FileServiceException when the file cannot be written
+     */
+    public synchronized void saveInventoryToJson(String inventoryFilePath) throws FileServiceException {
+        inventoryManager.saveInventoryToJson(inventoryFilePath);
+        this.activeInventoryFilePath = inventoryFilePath;
+    }
+
+    /**
+     * Provides access to the inventory manager.
      *
      * @return inventory manager
      */
@@ -62,7 +67,7 @@ public class StoreFront {
     }
 
     /**
-     * Provides access to the shopping cart for display purposes.
+     * Provides access to the shopping cart.
      *
      * @return shopping cart
      */
@@ -71,67 +76,84 @@ public class StoreFront {
     }
 
     /**
-     * Returns a sorted view of the store inventory.
+     * Returns a sorted inventory view.
      *
-     * This keeps sorting logic inside the service layer so the UI only needs
-     * to request the desired sort field and direction.
-     *
-     * @param sortBy sort field, such as "name" or "price"
-     * @param ascending true for ascending order, false for descending order
-     * @return sorted list of products
+     * @param sortBy sort field
+     * @param ascending true for ascending order
+     * @return sorted products
      */
-    public List<SalableProduct> getSortedProducts(String sortBy, boolean ascending) {
+    public synchronized List<SalableProduct> getSortedProducts(String sortBy, boolean ascending) {
         return inventoryManager.getSortedProducts(sortBy, ascending);
     }
 
     /**
-     * Purchases a product by moving stock from inventory into the cart.
-     *
-     * The stock check happens first so inventory never becomes negative.
-     * If the request is invalid or stock is unavailable, an exception is thrown.
+     * Purchases a product by moving stock from inventory to cart.
      *
      * @param productName product name
      * @param qty quantity to purchase
+     * @throws FileServiceException when updated inventory cannot be saved
      */
-    public void purchaseProduct(String productName, int qty) {
-
-        // Verify stock availability before making any changes.
+    public synchronized void purchaseProduct(String productName, int qty) throws FileServiceException {
         if (!inventoryManager.hasStock(productName, qty)) {
             throw new IllegalStateException("Not enough stock to purchase.");
         }
 
-        // Remove from inventory first. This ensures we do not add items to the cart
-        // unless we have actually reserved them from inventory.
         inventoryManager.removeStock(productName, qty);
-
-        // Add to cart second. This is the final step that represents the user's "purchase intent."
         shoppingCart.addItem(productName, qty);
+
+        if (activeInventoryFilePath != null) {
+            inventoryManager.saveInventoryToJson(activeInventoryFilePath);
+        }
     }
 
     /**
-     * Cancels a purchase by moving quantity from cart back into inventory.
-     *
-     * Removing from the cart first guarantees the cart has enough quantity to cancel.
-     * Once the cart update succeeds, inventory is restored.
+     * Cancels a purchase by moving quantity from cart back to inventory.
      *
      * @param productName product name
      * @param qty quantity to cancel
+     * @throws FileServiceException when updated inventory cannot be saved
      */
-    public void cancelPurchase(String productName, int qty) {
-
-        // If the cart does not have enough to remove, this will throw an exception.
+    public synchronized void cancelPurchase(String productName, int qty) throws FileServiceException {
         shoppingCart.removeItem(productName, qty);
-
-        // Restore inventory once the cart has been updated successfully.
         inventoryManager.addStock(productName, qty);
+
+        if (activeInventoryFilePath != null) {
+            inventoryManager.saveInventoryToJson(activeInventoryFilePath);
+        }
     }
 
     /**
-     * Calculates the total cost of the current cart.
+     * Returns the current cart total.
      *
-     * @return total price for items currently in the cart
+     * @return cart total
      */
-    public BigDecimal getCartTotal() {
+    public synchronized BigDecimal getCartTotal() {
         return shoppingCart.calculateTotal(inventoryManager);
+    }
+
+    /**
+     * Replaces the full inventory using admin-provided data and saves it.
+     *
+     * @param items admin item data
+     * @param inventoryFilePath file path to save
+     * @throws FileServiceException when save fails
+     */
+    public synchronized void replaceInventoryFromAdmin(List<InventoryItemData> items,
+                                                       String inventoryFilePath) throws FileServiceException {
+        inventoryManager.replaceInventoryFromItemData(items);
+        inventoryManager.saveInventoryToJson(inventoryFilePath);
+        this.activeInventoryFilePath = inventoryFilePath;
+    }
+
+    /**
+     * Returns the current inventory as a JSON string.
+     *
+     * @param inventoryFilePath inventory file path
+     * @return inventory JSON
+     * @throws FileServiceException when reading or converting fails
+     */
+    public synchronized String getInventoryAsJson(String inventoryFilePath) throws FileServiceException {
+        saveInventoryToJson(inventoryFilePath);
+        return inventoryManager.getInventoryAsJson();
     }
 }
