@@ -3,7 +3,7 @@
   "name" : "Steel Sword",
   "description" : "Stronger one-handed sword",
   "price" : 50.00,
-  "quantity" : 8
+  "quantity" : 7
 }, {
   "type" : "ARMOR",
   "name" : "Chain Mail",
